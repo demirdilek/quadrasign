@@ -1,0 +1,37 @@
+# Binaries and preresults
+bin/
+dist/
+out/
+quadrasign
+
+# Architecture specific files
+*.exe
+*.exe_with_dbg
+*.dll
+*.so
+*.dylib
+
+# Test coverage results
+*.out
+*.prof
+
+# Go modules dependency management
+vendor/
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
