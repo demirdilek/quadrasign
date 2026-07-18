@@ -1,0 +1,3 @@
+http://httpbin/delay/1
+http://httpbin/status/200
+http://httpbin/status/500
