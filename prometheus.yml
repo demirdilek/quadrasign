@@ -4,7 +4,7 @@ global:
 
 scrape_configs:
   # ONLY monitor the custom Go application
-  - job_name: 'quadrasign-prober'
+  - job_name: 'api-prober'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['quadrasign:8080']
+      - targets: ['api-prober:8080']

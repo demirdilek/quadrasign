@@ -1,4 +1,4 @@
-# QuadraSign
+# api-prober
 
 A cloud-native, platform-independent SRE telemetry stack written in Go. This project implements and visualizes the **4 Golden Signals** (Latency, Traffic, Errors, Saturation) for distributed edge environments.
 
@@ -40,7 +40,7 @@ make clean
 ## Configuration
 
 * **Targets:** Define your endpoints in `targets.csv`.
-* **Metrics:** Accessible internally via `http://quadrasign:8080/metrics`.
+* **Metrics:** Accessible internally via `http://api-prober:8080/metrics`.
 * **Dashboard:** Grafana is provisioned automatically with a pre-configured dashboard.
 
 ## Troubleshooting: Container Networking
@@ -59,11 +59,11 @@ Since the entire stack runs fully isolated within a custom Docker bridge network
    Prometheus pulls the 4 Golden Signals directly from the Go container. The target must point to the service name defined in your compose file:
    ```yaml
    static_configs:
-     - targets: ['quadrasign:8080']
+     - targets: ['api-prober:8080']
    ```
 
 3. **Nginx Proxy Routes (`nginx.conf`):**
-   If metrics or dashboards are unreachable from the outside, verify that your reverse proxy configuration routes traffic to the correct internal container names (`quadrasign` and `grafana`).
+   If metrics or dashboards are unreachable from the outside, verify that your reverse proxy configuration routes traffic to the correct internal container names (`api-prober` and `grafana`).
 
 ## Roadmap
 

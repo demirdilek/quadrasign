@@ -25,7 +25,7 @@ var (
 	// 1. LATENCY (Histogram to measure response time distribution)
 	latencyHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "quadrasign_latency_seconds",
+			Name:    "api_prober_latency_seconds",
 			Help:    "The time taken to probe the target in seconds (Latency).",
 			Buckets: prometheus.DefBuckets,
 		},
@@ -35,7 +35,7 @@ var (
 	// 2. TRAFFIC (Counter to measure the rate of incoming requests/probes)
 	trafficCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "quadrasign_traffic_total",
+			Name: "api_prober_traffic_total",
 			Help: "Total number of probes sent to the target (Traffic).",
 		},
 		[]string{"target"},
@@ -44,7 +44,7 @@ var (
 	// 3. ERRORS (Counter to track failed requests, e.g., non-2xx status codes)
 	errorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "quadrasign_errors_total",
+			Name: "api_prober_errors_total",
 			Help: "Total number of failed probes (Errors).",
 		},
 		[]string{"target", "status_code"},
@@ -53,12 +53,13 @@ var (
 	// 4. SATURATION (Gauge to track current concurrent active workers per target)
 	saturationGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "quadrasign_saturation_active_workers",
+			Name: "api_prober_saturation_active_workers",
 			Help: "Number of active concurrent probing workers (Saturation).",
 		},
 		[]string{"target"},
 	)
 )
+
 
 func init() {
 	// Register all metrics with Prometheus

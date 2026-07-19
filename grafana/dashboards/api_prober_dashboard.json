@@ -13,7 +13,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum(rate(quadrasign_latency_seconds_bucket[5m])) by (le, target))",
+          "expr": "histogram_quantile(0.99, sum(rate(api_prober_latency_seconds_bucket[5m])) by (le, target))",
           "legendFormat": "{{target}} (p99)"
         }
       ],
@@ -27,7 +27,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "targets": [
         {
-          "expr": "sum(rate(quadrasign_traffic_total[5m])) by (target)",
+          "expr": "sum(rate(api_prober_traffic_total[5m])) by (target)",
           "legendFormat": "{{target}}"
         }
       ],
@@ -41,7 +41,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "targets": [
         {
-          "expr": "sum(rate(quadrasign_errors_total[5m])) by (target, status_code)",
+          "expr": "sum(rate(api_prober_errors_total[5m])) by (target, status_code)",
           "legendFormat": "{{target}} - Status {{status_code}}"
         }
       ],
@@ -55,7 +55,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "targets": [
         {
-          "expr": "quadrasign_saturation_active_workers",
+          "expr": "api_prober_saturation_active_workers",
           "legendFormat": "{{target}}"
         }
       ],
@@ -71,6 +71,6 @@
   "time": { "from": "now-15m", "to": "now" },
   "timepicker": {},
   "timezone": "",
-  "title": "Quadrasign - 4 Golden Signals",
+  "title": "api-prober - 4 Golden Signals",
   "version": 2
 }

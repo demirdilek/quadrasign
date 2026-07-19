@@ -11,15 +11,15 @@ COPY . .
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-w -s" -o quadrasign .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -ldflags="-w -s" -o api-prober .
 
 # Stage 2: Final minimal image
 FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/quadrasign .
+COPY --from=builder /app/api-prober .
 
 EXPOSE 8080
 
-CMD ["./quadrasign"]
+CMD ["./api-prober"]

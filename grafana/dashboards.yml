@@ -1,7 +1,7 @@
 apiVersion: 1
 
 providers:
-  - name: 'quadrasign-dashboards'
+  - name: 'api-prober-dashboards'
     orgId: 1
     folder: ''
     type: file

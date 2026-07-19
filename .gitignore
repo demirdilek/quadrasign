@@ -2,7 +2,7 @@
 bin/
 dist/
 out/
-quadrasign
+api-prober
 
 # Architecture specific files
 *.exe

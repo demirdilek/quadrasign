@@ -1,4 +1,4 @@
-module github.com/demirdilek/quadrasign
+module github.com/demirdilek/api-prober
 
 go 1.26.1
 

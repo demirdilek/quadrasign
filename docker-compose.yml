@@ -1,10 +1,10 @@
 services:
   # 1. QuadraSign Go Application
-  quadrasign:
+  api-prober:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: quadrasign_app
+    container_name: api_prober_app
     restart: unless-stopped
     expose:
       - "8080"
@@ -47,7 +47,7 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SERVER_ROOT_URL=http://localhost/dashboard/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/quadrasign_dashboard.json
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/api_prober_dashboard.json
     volumes:
       - grafana-storage:/var/lib/grafana
       - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
@@ -77,7 +77,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - grafana
-      - quadrasign
+      - api-prober
     networks:
       - monitoring
 
