@@ -1,5 +1,5 @@
 services:
-  # 1. QuadraSign Go Application
+  # 1. api-prober Go Application
   api-prober:
     build:
       context: .
@@ -69,12 +69,14 @@ services:
   # 5. Nginx Gateway
   nginx:
     image: nginx:alpine
-    container_name: nginx_proxy
+    container_name: api_prober_proxy
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443" # for secure https encryption opened
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro # mount tls certificates to the container
     depends_on:
       - grafana
       - api-prober
