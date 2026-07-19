@@ -236,9 +236,14 @@ func main() {
 
 	targetsFile := "targets.csv"
 
-	// Shared HTTP client with a strict timeout policy
+// Shared HTTP client hardened with connection pooling to prevent socket leaks on the edge
 	client := &http.Client{
 		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+		},
 	}
 
 	// Create a cancelable context tied to OS lifecycle signals
@@ -289,5 +294,5 @@ func main() {
 
 	// Wait until all dynamically handled workers have completely finished their last loop execution
 	wg.Wait()
-	slog.Info("Quadrasign stack components stopped cleanly. Goodbye.")
+	slog.Info("api-prober stack components stopped cleanly. Goodbye.")
 }
