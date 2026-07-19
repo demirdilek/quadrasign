@@ -52,3 +52,13 @@ http://httpbin/delay/1
 		}
 	}
 }
+
+func TestReadTargets_FileNotFound(t *testing.T) {
+	// Execute the function with a file path that definitely does not exist
+	_, err := readTargets("non_existent_file.csv")
+	
+	// We strictly expect an error here
+	if err == nil {
+		t.Fatal("Expected an error when reading a non-existent file, but got nil")
+	}
+}
