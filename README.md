@@ -2,6 +2,7 @@
 
 A cloud-native, platform-independent SRE telemetry stack written in Go. This project implements and visualizes the **4 Golden Signals** (Latency, Traffic, Errors, Saturation) for distributed edge environments.
 
+
 ## Features
 
 * **Dynamic Targets:** Monitored endpoints are dynamically loaded via `targets.csv`. A native background watcher applies updates on the fly, provisioning or gracefully terminating worker goroutines without requiring application restarts.
@@ -12,6 +13,42 @@ A cloud-native, platform-independent SRE telemetry stack written in Go. This pro
 ## Architecture
 
 All services communicate within an isolated internal Docker bridge network. Public access is routed strictly through the Nginx gateway, forcing an automatic HTTP-to-HTTPS redirect for all endpoints.
+
+```text
+api-prober Architecture
+│
+├── Configuration Layer
+│   └── targets.csv (Dynamic target config)
+│
+├── Core Engine (Go)
+│   ├── watchTargets() (Polls targets.csv every 5s)
+│   ├── Dynamic Goroutines (Spawns/cancels per target via Context)
+│   └── Shared http.Client (Connection pooling & 5s timeouts)
+│
+├── External Endpoints
+│   └── Target APIs (Probed via HTTP GET)
+│
+└── Observability & Diagnostics Stack
+    ├── Structured Logs (JSON stdout via slog)
+    ├── Go HTTP Exporter (:8080) ──> Serves /metrics & /debug/pprof
+    ├── Prometheus ───────────────> Scrapes /metrics every interval
+    └── Grafana ──────────────────> Queries Prometheus via PromQL
+```
+
+## 📊 Telemetry & Alerting Preview
+
+### 4 Golden Signals Dashboard
+<img src="assets/grafana-dashboard.png" alt="Grafana Dashboard" />
+
+### Emergency Mobile Pushover Alert
+<img src="assets/pushover-alert.png" alt="Pushover Alert" width="280" />
+
+
+### Live Logging Output
+<img src="assets/slog-output.png" alt="Live Logging Output" width="800" />
+
+### Container Health
+<img src="assets/docker-ps.png" alt="Container Health" />
 
 ## Getting Started
 
@@ -70,6 +107,11 @@ To verify the entire alerting pipeline from the edge to your phone, add a failin
 ```csv
 http://httpbin/status/500
 ```
+## 🗺️ Roadmap & Future Improvements
+
+- [ ] **Bounded Worker Pool:** Refactor the current per-target goroutine model into a fixed worker pool with a buffered job channel to handle thousands of endpoints without risking high resource usage under heavy load.
+- [ ] **Dynamic Probe Intervals:** Allow configurable probing intervals per target in `targets.csv`.
+- [ ] **Automated Integration Tests:** Add end-to-end tests for target CSV mutations and context cancellation.
 
 ## Troubleshooting: Container Networking
 
