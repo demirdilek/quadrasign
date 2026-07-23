@@ -142,7 +142,6 @@ api-prober:
 
 ## 🗺️ Roadmap & Future Improvements
 
-- [ ] **Dynamic Probe Intervals:** Allow configurable probing intervals per target in `targets.csv`.
 
 ## Troubleshooting: Container Networking
 
