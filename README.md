@@ -66,7 +66,6 @@ Before starting the stack, create a `.env` file in the root directory to store y
 PUSHOVER_USER_KEY=your_user_key_here
 PUSHOVER_API_TOKEN=your_api_token_here
 ```
-
 ### Installation & Lifecycle
 
 You can manage the entire application lifecycle using the provided `Makefile`:
@@ -75,14 +74,29 @@ You can manage the entire application lifecycle using the provided `Makefile`:
 # View available commands
 make
 
-# Build, generate local development TLS certs, and start the entire stack
+# Build, generate local development TLS certs, and start the Docker Compose stack
 make up
 
-# Stop all running containers and remove orphans
+# Stop all Docker Compose containers
 make down
 
-# Stop containers and completely wipe all persistent telemetry data and certificates
+# Stop Docker Compose containers, wipe persistent data, and remove certificates
 make clean
+
+# Run Go unit and integration tests locally
+make test
+
+# Create a local k3d Kubernetes development cluster
+make k3d-up
+
+# Build the Docker image locally and load it into k3d
+make k3d-build
+
+# Apply the Kubernetes manifests from deploy/k8s/
+make k3d-deploy
+
+# Destroy the local k3d cluster and release resources
+make k3d-down
 ```
 
 ## Configuration
@@ -139,6 +153,13 @@ api-prober:
     networks:
       - monitoring
 ```
+## Kubernetes & Local Deployment
+
+The application runs locally inside a lightweight Kubernetes cluster managed via **k3d**, paired with the `kube-prometheus-stack` Helm chart for full observability.
+
+* **Cluster Setup:** Spin up your local development environment using the provided deployment Makefile commands.
+* **Secret Management:** Sensitive credentials—such as the Pushover `token` and `user_key`—are pulled securely at runtime from **1Password** using the 1Password CLI (`op read`) and injected directly into Kubernetes Secrets. No plain-text credentials are ever stored in version control.
+* **Observability Stack:** Includes Prometheus for scraping metrics, Alertmanager for notification routing, and sidecar-provisioned Grafana dashboards mapped to the local codebase.
 
 ## 🗺️ Roadmap & Future Improvements
 

@@ -1,0 +1,57 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: api-prober-rules
+  namespace: monitoring
+  labels:
+    # This label is strictly required for the Prometheus Operator to discover the rules
+    release: prom-stack
+spec:
+  groups:
+  - name: api-prober-golden-signals
+    rules:
+    
+    # 1. Errors: High failure rate
+    - alert: HighErrorRate
+      expr: rate(api_prober_errors_total[5m]) / rate(api_prober_requests_total[5m]) > 0.05
+      for: 2m
+      labels:
+        severity: critical
+        namespace: monitoring
+      annotations:
+        summary: "High API error rate detected"
+        description: "The error rate has exceeded 5% over the last 5 minutes."
+
+    # 2. Latency: Slow responses
+    - alert: HighLatency
+      expr: histogram_quantile(0.95, rate(api_prober_request_duration_seconds_bucket[5m])) > 2.0
+      for: 2m
+      labels:
+        severity: warning
+        namespace: monitoring
+      annotations:
+        summary: "95th percentile latency is over 2 seconds"
+        description: "API endpoints are responding slower than the 2-second threshold."
+
+    # 3. Traffic: Unintended drop in request volume
+    - alert: LowTraffic
+      expr: rate(api_prober_requests_total[5m]) < 1
+      for: 5m
+      labels:
+        severity: warning
+        namespace: monitoring
+      annotations:
+        summary: "Traffic has dropped significantly"
+        description: "The prober is executing fewer than 1 request per second. The worker pool might be stalled."
+
+    # 4. Saturation: Worker pool exhaustion
+    - alert: HighSaturation
+      expr: api_prober_active_workers / api_prober_max_workers > 0.90
+      for: 5m
+      labels:
+        severity: warning
+        namespace: monitoring
+      annotations:
+        summary: "Worker pool is near maximum capacity"
+        description: "More than 90% of the Go workers are currently active. Consider increasing the pool limit."

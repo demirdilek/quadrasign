@@ -42,3 +42,10 @@ prometheus-data/
 
 # Security
 .env
+
+.idea/
+.vscode/
+dist/
+bin/
+*.local
+.DS_Store

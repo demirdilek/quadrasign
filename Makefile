@@ -1,14 +1,22 @@
 # Default target executed when you just type 'make'
 .DEFAULT_GOAL := help
 
-.PHONY: up down clean certs help
+.PHONY: up down clean certs help test k3d-up k3d-build k3d-deploy k3d-down
 
 # Internal command to generate the help documentation
 help:
 	@echo "Available commands:"
-	@echo "  make up     - Rebuild and start the complete api-prober stack"
-	@echo "  make down   - Stop all containers"
-	@echo "  make clean  - Stop containers and completely wipe all monitored data"
+	@echo "  --- Docker Compose Workflow ---"
+	@echo "  make up         - Rebuild and start the complete api-prober stack"
+	@echo "  make down       - Stop all containers"
+	@echo "  make clean      - Stop containers, wipe data, and remove certificates"
+	@echo "  make test       - Run Go unit and integration tests locally"
+	@echo ""
+	@echo "  --- Kubernetes / k3d Workflow ---"
+	@echo "  make k3d-up     - Create a local k3d Kubernetes development cluster"
+	@echo "  make k3d-build  - Build the Docker image locally and load it into k3d"
+	@echo "  make k3d-deploy - Apply the Kubernetes manifests from deploy/k8s/"
+	@echo "  make k3d-down   - Destroy the local k3d cluster and release resources"
 
 certs:
 	@mkdir -p certs
@@ -28,3 +36,20 @@ down:
 clean:
 	docker compose down -v --remove-orphans
 	rm -rf certs
+
+test:
+	go test -v ./...
+
+k3d-up:
+	k3d cluster create dev-cluster --port "8080:8080@loadbalancer"
+
+k3d-build:
+	docker build -t api-prober:latest .
+	k3d image import api-prober:latest -c dev-cluster
+	kubectl rollout restart deployment api-prober -n monitoring 2>/dev/null || true
+
+k3d-deploy:
+	kubectl apply -f deploy/k8s/api-prober.yaml
+
+k3d-down:
+	k3d cluster delete dev-cluster

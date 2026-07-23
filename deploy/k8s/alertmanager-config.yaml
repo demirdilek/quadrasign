@@ -1,0 +1,28 @@
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: api-prober-routing
+  namespace: monitoring
+  labels:
+    release: prom-stack
+spec:
+  route:
+    groupBy: ['alertname', 'severity']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 12h
+    receiver: 'pushover-notifications'
+  receivers:
+  - name: 'pushover-notifications'
+    pushoverConfigs:
+    - token:
+        name: pushover-credentials
+        key: token
+      userKey:
+        name: pushover-credentials
+        key: user_key
+      sendResolved: true
+      title: '{{ .GroupLabels.alertname }}'
+      message: '{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}'
+      priority: '{{ if eq .GroupLabels.severity "critical" }}1{{ else }}0{{ end }}'
