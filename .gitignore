@@ -42,6 +42,3 @@ prometheus-data/
 
 # Security
 .env
-
-# Local build artifacts
-api-prober

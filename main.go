@@ -11,6 +11,7 @@ import (
 	_ "net/http/pprof" // Trigger pprof initialization automatically
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,7 +23,6 @@ import (
 
 // Define Prometheus metrics for the 4 Golden Signals
 var (
-	// 1. LATENCY (Histogram to measure response time distribution)
 	latencyHistogram = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "api_prober_latency_seconds",
@@ -32,7 +32,6 @@ var (
 		[]string{"target"},
 	)
 
-	// 2. TRAFFIC (Counter to measure the rate of incoming requests/probes)
 	trafficCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "api_prober_traffic_total",
@@ -41,7 +40,6 @@ var (
 		[]string{"target"},
 	)
 
-	// 3. ERRORS (Counter to track failed requests, e.g., non-2xx status codes)
 	errorCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "api_prober_errors_total",
@@ -50,7 +48,6 @@ var (
 		[]string{"target", "status_code"},
 	)
 
-	// 4. SATURATION (Gauge to track current concurrent active workers per target)
 	saturationGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "api_prober_saturation_active_workers",
@@ -60,17 +57,18 @@ var (
 	)
 )
 
-
 func init() {
-	// Register all metrics with Prometheus
 	prometheus.MustRegister(latencyHistogram)
 	prometheus.MustRegister(trafficCounter)
 	prometheus.MustRegister(errorCounter)
 	prometheus.MustRegister(saturationGauge)
 }
 
-// readTargets parses the targets.csv file and returns a list of valid URLs.
-// It logs malformed rows instead of crashing entirely.
+// Job represents a single target probe task
+type Job struct {
+	Target string
+}
+
 func readTargets(filepath string) ([]string, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -100,13 +98,10 @@ func readTargets(filepath string) ([]string, error) {
 	return targets, nil
 }
 
-// probeTarget executes an HTTP GET request against a target and records metrics
 func probeTarget(ctx context.Context, target string, client *http.Client) {
-	// Increment Saturation before starting the work
 	saturationGauge.WithLabelValues(target).Inc()
 	defer saturationGauge.WithLabelValues(target).Dec()
 
-	// Increment Traffic
 	trafficCounter.WithLabelValues(target).Inc()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
@@ -127,45 +122,62 @@ func probeTarget(ctx context.Context, target string, client *http.Client) {
 	}
 	defer resp.Body.Close()
 
-	// Record Latency
 	latencyHistogram.WithLabelValues(target).Observe(duration)
 
-	// Check for Errors (Any status code outside the 2xx range)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		statusStr := fmt.Sprintf("%d", resp.StatusCode)
 		errorCounter.WithLabelValues(target, statusStr).Inc()
 		slog.Warn("Target returned non-2xx status code", "target", target, "status_code", resp.StatusCode)
 	} else {
-		slog.Info("Target probed successfully", "target", target, "duration_seconds", duration)
+		slog.Debug("Target probed successfully", "target", target, "duration_seconds", duration)
 	}
 }
 
-// worker manages the lifecycle loop for a single target and listens to context cancellation
-func worker(ctx context.Context, target string, client *http.Client, wg *sync.WaitGroup) {
+func workerPool(ctx context.Context, jobs <-chan Job, client *http.Client, wg *sync.WaitGroup) {
 	defer wg.Done()
-	ticker := time.NewTicker(2 * time.Second) // Probe every 2 seconds
-	defer ticker.Stop()
-
-	slog.Info("Starting prober routine for target", "target", target)
-
-	// Execute initial probe immediately
-	probeTarget(ctx, target, client)
-
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("Stopping worker routine due to context cancellation", "target", target)
 			return
-		case <-ticker.C:
-			probeTarget(ctx, target, client)
+		case job, ok := <-jobs:
+			if !ok {
+				return
+			}
+			probeTarget(ctx, job.Target, client)
 		}
 	}
 }
 
-// watchTargets monitors the configuration file for changes and manages live worker pools
-func watchTargets(ctx context.Context, filepath string, client *http.Client, activeWorkers map[string]context.CancelFunc, mu *sync.Mutex, wg *sync.WaitGroup) {
-	var lastModTime time.Time
+func targetScheduler(ctx context.Context, target string, jobs chan<- Job, interval time.Duration, wg *sync.WaitGroup) {
+	defer wg.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
+	slog.Debug("Starting target scheduler", "target", target)
+
+	select {
+	case jobs <- Job{Target: target}:
+	case <-ctx.Done():
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Debug("Stopping target scheduler", "target", target)
+			return
+		case <-ticker.C:
+			select {
+			case jobs <- Job{Target: target}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
+
+func watchTargets(ctx context.Context, filepath string, jobs chan<- Job, client *http.Client, interval time.Duration, activeSchedulers map[string]context.CancelFunc, mu *sync.Mutex, wg *sync.WaitGroup) {
+	var lastModTime time.Time
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
@@ -180,7 +192,6 @@ func watchTargets(ctx context.Context, filepath string, client *http.Client, act
 				continue
 			}
 
-			// Check if file has been modified since the last loop check
 			if stat.ModTime().After(lastModTime) {
 				lastModTime = stat.ModTime()
 				slog.Info("Targets file modification detected, synchronization triggered", "file", filepath)
@@ -192,25 +203,23 @@ func watchTargets(ctx context.Context, filepath string, client *http.Client, act
 				}
 
 				mu.Lock()
-				// 1. Terminate workers for targets removed from the CSV configuration
-				for target, cancelFunc := range activeWorkers {
+				for target, cancelFunc := range activeSchedulers {
 					if !contains(newTargets, target) {
-						slog.Info("Target missing from new config, cancelling worker execution", "target", target)
+						slog.Info("Target missing from new config, cancelling scheduler", "target", target)
 						cancelFunc()
-						delete(activeWorkers, target)
+						delete(activeSchedulers, target)
 					}
 				}
 
-				// 2. Initialize new workers for fresh targets appended to the configuration
 				for _, target := range newTargets {
-					if _, exists := activeWorkers[target]; !exists {
-						slog.Info("New target found, allocating standalone worker architecture", "target", target)
+					if _, exists := activeSchedulers[target]; !exists {
+						slog.Info("New target found, allocating scheduler", "target", target)
 						
-						workerCtx, workerCancel := context.WithCancel(ctx)
-						activeWorkers[target] = workerCancel
+						schedCtx, schedCancel := context.WithCancel(ctx)
+						activeSchedulers[target] = schedCancel
 
 						wg.Add(1)
-						go worker(workerCtx, target, client, wg)
+						go targetScheduler(schedCtx, target, jobs, interval, wg)
 					}
 				}
 				mu.Unlock()
@@ -219,7 +228,6 @@ func watchTargets(ctx context.Context, filepath string, client *http.Client, act
 	}
 }
 
-// Helper to determine if a specific slice context holds the required key
 func contains(slice []string, key string) bool {
 	for _, item := range slice {
 		if item == key {
@@ -229,44 +237,75 @@ func contains(slice []string, key string) bool {
 	return false
 }
 
+// getEnvAsInt reads an environment variable and falls back to a default if missing or invalid
+func getEnvAsInt(name string, defaultVal int) int {
+	valStr := os.Getenv(name)
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		slog.Warn("Invalid integer for environment variable, using default", "env", name, "default", defaultVal, "error", err)
+		return defaultVal
+	}
+	return val
+}
+
 func main() {
-	// Initialize structured production JSON logging
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	targetsFile := "targets.csv"
 
-// Shared HTTP client hardened with connection pooling to prevent socket leaks on the edge
+	// Parse environment variables for scale configuration
+	numWorkers := getEnvAsInt("WORKERS", 50)
+	jobQueueSize := getEnvAsInt("QUEUE_SIZE", 10000)
+	maxIdleConns := getEnvAsInt("MAX_IDLE_CONNS", 1000)
+	maxIdleConnsPerHost := getEnvAsInt("MAX_IDLE_CONNS_PER_HOST", 100)
+	probeIntervalSeconds := getEnvAsInt("PROBE_INTERVAL_SECONDS", 2)
+
+	probeInterval := time.Duration(probeIntervalSeconds) * time.Second
+
+	slog.Info("Starting api-prober with configuration",
+		"workers", numWorkers,
+		"queue_size", jobQueueSize,
+		"max_idle_conns", maxIdleConns,
+		"max_idle_conns_per_host", maxIdleConnsPerHost,
+		"probe_interval", probeInterval,
+	)
+
 	client := &http.Client{
 		Timeout: 5 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
+			MaxIdleConns:        maxIdleConns,
+			MaxIdleConnsPerHost: maxIdleConnsPerHost,
 			IdleConnTimeout:     90 * time.Second,
 		},
 	}
 
-	// Create a cancelable context tied to OS lifecycle signals
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Dynamic memory maps and synchronization primitives to safely control goroutines
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	activeWorkers := make(map[string]context.CancelFunc)
+	activeSchedulers := make(map[string]context.CancelFunc)
 
-	// Start the dynamic background file watcher tracking target mutations
-	go watchTargets(ctx, targetsFile, client, activeWorkers, &mu, &wg)
+	jobs := make(chan Job, jobQueueSize)
 
-	// Setup the HTTP server using the default mux to include pprof + prometheus
-    http.Handle("/metrics", promhttp.Handler())
-    
-    srv := &http.Server{
-        Addr:    ":8080",
-        Handler: nil, // Setting handler to nil forces it to use http.DefaultServeMux
-    }
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go workerPool(ctx, jobs, client, &wg)
+	}
 
-	// Listen for termination signals in a separate goroutine to trigger graceful shutdown
+	go watchTargets(ctx, targetsFile, jobs, client, probeInterval, activeSchedulers, &mu, &wg)
+
+	http.Handle("/metrics", promhttp.Handler())
+	
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: nil,
+	}
+
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
 
@@ -274,10 +313,8 @@ func main() {
 		<-shutdownChan
 		slog.Info("Received shutdown signal, initiating graceful termination...")
 		
-		// Stop all background worker routine loops and file watcher via context cancellation
 		cancel()
 
-		// Allow the HTTP server 5 seconds to finish serving existing metrics requests
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer shutdownCancel()
 
@@ -292,7 +329,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Wait until all dynamically handled workers have completely finished their last loop execution
 	wg.Wait()
 	slog.Info("api-prober stack components stopped cleanly. Goodbye.")
 }

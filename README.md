@@ -107,9 +107,41 @@ To verify the entire alerting pipeline from the edge to your phone, add a failin
 ```csv
 http://httpbin/status/500
 ```
+## Worker Pool Concurrency
+
+The prober now implements a Go worker pool pattern to concurrently ping multiple API endpoints defined in the `targets.csv`. 
+
+Instead of processing each URL sequentially, the application spins up a fixed number of worker goroutines to handle the requests in parallel. This design allows the prober to gather the four golden signals—latency, traffic, errors, and saturation—much more accurately and in real-time.
+
+**Key Benefits:**
+* **Efficiency:** Drastically reduces total probing time for large target lists.
+* **Resource Management:** Prevents CPU and memory exhaustion by capping the maximum number of concurrent goroutines.
+* **Scalability:** Easily handles an increasing number of endpoints without degrading performance.
+* **Variables:** Change this for your desire in the docker-compose.yml
+```yaml
+api-prober:
+    build: .
+    container_name: api-prober
+    restart: unless-stopped
+    environment:
+      # Worker pool and job queue scaling
+      - WORKERS=50
+      - QUEUE_SIZE=10000
+      
+      # HTTP connection pooling limits
+      - MAX_IDLE_CONNS=1000
+      - MAX_IDLE_CONNS_PER_HOST=100
+      
+      # Frequency of probes per target
+      - PROBE_INTERVAL_SECONDS=2
+    volumes:
+      - ./targets.csv:/app/targets.csv:ro
+    networks:
+      - monitoring
+```
+
 ## 🗺️ Roadmap & Future Improvements
 
-- [ ] **Bounded Worker Pool:** Refactor the current per-target goroutine model into a fixed worker pool with a buffered job channel to handle thousands of endpoints without risking high resource usage under heavy load.
 - [ ] **Dynamic Probe Intervals:** Allow configurable probing intervals per target in `targets.csv`.
 - [ ] **Automated Integration Tests:** Add end-to-end tests for target CSV mutations and context cancellation.
 
