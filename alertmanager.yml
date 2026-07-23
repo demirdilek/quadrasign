@@ -3,9 +3,9 @@ global:
 
 route:
   group_by: ['alertname', 'target']
-  group_wait: 5s
-  group_interval: 5s
-  repeat_interval: 1h
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
   receiver: 'pushover-alerts'
 
 receivers:
@@ -13,6 +13,11 @@ receivers:
     pushover_configs:
       - user_key: 'PUSHOVER_USER_KEY_PLACEHOLDER'
         token: 'PUSHOVER_API_TOKEN_PLACEHOLDER'
-        priority: '1'
+        # Escalated to Emergency priority to bypass silent mode
+        priority: '2'
+        # Repeats the alert sound every 30 seconds until acknowledged
+        retry: '30s'
+        # Stops repeating the sound after 15 minutes if unacknowledged
+        expire: '15m'
         title: 'SRE Alert: {{ .CommonLabels.alertname }}'
         message: '{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}'
