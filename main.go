@@ -263,6 +263,7 @@ func main() {
 	maxIdleConns := getEnvAsInt("MAX_IDLE_CONNS", 1000)
 	maxIdleConnsPerHost := getEnvAsInt("MAX_IDLE_CONNS_PER_HOST", 100)
 	probeIntervalSeconds := getEnvAsInt("PROBE_INTERVAL_SECONDS", 2)
+	httpTimeoutSeconds := getEnvAsInt("HTTP_TIMEOUT_SECONDS", 5)
 
 	probeInterval := time.Duration(probeIntervalSeconds) * time.Second
 
@@ -272,10 +273,11 @@ func main() {
 		"max_idle_conns", maxIdleConns,
 		"max_idle_conns_per_host", maxIdleConnsPerHost,
 		"probe_interval", probeInterval,
+		"http_timeout_seconds", httpTimeoutSeconds,
 	)
 
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: time.Duration(httpTimeoutSeconds) * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        maxIdleConns,
 			MaxIdleConnsPerHost: maxIdleConnsPerHost,

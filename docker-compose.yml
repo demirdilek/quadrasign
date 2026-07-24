@@ -17,6 +17,9 @@ services:
       
       # Frequency of probes per target
       - PROBE_INTERVAL_SECONDS=2
+      
+      # Timeout for individual HTTP requests
+      - HTTP_TIMEOUT_SECONDS=5
     expose:
       - "8080"
     volumes:

@@ -149,6 +149,10 @@ api-prober:
       
       # Frequency of probes per target
       - PROBE_INTERVAL_SECONDS=2
+
+      # Timeout for individual HTTP requestsa
+      - HTTP_TIMEOUT_SECONDS=5
+
     volumes:
       - ./targets.csv:/app/targets.csv:ro
     networks:
