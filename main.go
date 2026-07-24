@@ -283,7 +283,8 @@ func main() {
 		},
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	// Setup root context listening for termination signals
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
 	var wg sync.WaitGroup
@@ -292,43 +293,45 @@ func main() {
 
 	jobs := make(chan Job, jobQueueSize)
 
+	// Start worker pool
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go workerPool(ctx, jobs, client, &wg)
 	}
 
+	// Start target file watcher
 	go watchTargets(ctx, targetsFile, jobs, client, probeInterval, activeSchedulers, &mu, &wg)
 
-	http.Handle("/metrics", promhttp.Handler())
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
 	
 	srv := &http.Server{
 		Addr:    ":8080",
-		Handler: nil,
+		Handler: mux,
 	}
 
-	shutdownChan := make(chan os.Signal, 1)
-	signal.Notify(shutdownChan, os.Interrupt, syscall.SIGTERM)
-
+	// Start HTTP server in a separate goroutine
 	go func() {
-		<-shutdownChan
-		slog.Info("Received shutdown signal, initiating graceful termination...")
-		
-		cancel()
-
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer shutdownCancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			slog.Error("HTTP server forced to shutdown", "error", err)
+		slog.Info("Metric server starting on :8080/metrics")
+		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("HTTP server failed to run", "error", err)
+			os.Exit(1)
 		}
 	}()
 
-	slog.Info("Metric server starting on :8080/metrics")
-	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		slog.Error("HTTP server failed to run", "error", err)
-		os.Exit(1)
+	// Block until context is canceled via shutdown signal
+	<-ctx.Done()
+	slog.Info("Received shutdown signal, initiating graceful termination...")
+
+	// Create shutdown context with a 5-second timeout for the HTTP server
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("HTTP server forced to shutdown", "error", err)
 	}
 
+	// Wait for all workers and schedulers to finish their current tasks
 	wg.Wait()
 	slog.Info("api-prober stack components stopped cleanly. Goodbye.")
 }
