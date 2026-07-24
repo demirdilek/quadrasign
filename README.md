@@ -12,6 +12,8 @@ A cloud-native, platform-independent SRE telemetry stack written in Go. This pro
 * **Multi-Stage & Multi-Arch Build:** Minimal Docker footprint supporting both `amd64` and `arm64` architectures.
 * **Fully Encapsulated Stack:** Self-contained environment featuring Go, Prometheus, Alertmanager, Grafana, Nginx, and Httpbin.
 * **Graceful Shutdown:** Listens for termination signals (`SIGINT`, `SIGTERM`) to cleanly shut down the HTTP metric server, active workers, and dynamic target schedulers without dropping in-flight probes.
+- **Configurable via Environment Variables:** Fully aligned with Twelve-Factor App principles.
+- **Automated CI/CD:** GitHub Actions pipeline ensuring clean builds and dependency caching.
 
 ## Architecture
 
